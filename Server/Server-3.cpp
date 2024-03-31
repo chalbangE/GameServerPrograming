@@ -4,7 +4,7 @@
 
 #pragma comment (lib, "WS2_32.LIB")
 
-const short SERVER_PORT = 4000;
+const short SERVER_PORT = 2551;
 const int BUFSIZE = 256;
 
 
@@ -12,44 +12,65 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
 void CALLBACK send_callback(DWORD err, DWORD send_size, LPWSAOVERLAPPED pover, DWORD send_flag);
 void print_error(const char* msg, int err_no);
 
+class SESSION;
+class EXP_OVER;
+class KEY_PACKET;
+class POS_PACKET;
+class BASIC_PACKET;
+
 std::unordered_map<LPWSAOVERLAPPED, int> g_session_map;
+std::unordered_map<int, SESSION> g_players;
+
+class EXP_OVER
+{
+public:
+    WSAOVERLAPPED over;
+    WSABUF wsabuf[1];
+    char buf[BUFSIZE];
+
+    EXP_OVER(int s_id, char* mess, int m_size)
+    {
+        ZeroMemory(&over, sizeof(over));
+        wsabuf[0].buf = buf;
+        wsabuf[0].len = m_size + 2;
+
+        buf[0] = m_size + 2;
+        buf[1] = s_id;
+        memcpy(buf + 2, mess, m_size);
+    }
+};
 
 class SESSION {
-    char buf[BUFSIZE]{};
-    WSABUF wsabuf[1]{};
-    SOCKET client_s{};
-    WSAOVERLAPPED over{};
+    char buf[BUFSIZE];
+    WSABUF recv_wsabuf[1];
+    WSABUF send_wsabuf[1];
+    SOCKET client_s;
+    WSAOVERLAPPED over;
 
 public:
     SESSION(SOCKET s, int my_id) : client_s(s)
     {
         g_session_map[&over] = my_id;
     }
-    SESSION() 
-    {
+    SESSION() {
         std::cout << "ERROR" << std::endl;
     }
     ~SESSION() { closesocket(client_s); }
 
     void do_recv()
     {
-        wsabuf[0].buf = buf;
-        wsabuf[0].len = BUFSIZE;
+        recv_wsabuf[0].buf = buf;
+        recv_wsabuf[0].len = BUFSIZE;
         DWORD recv_flag = 0;
         ZeroMemory(&over, sizeof(over));
-        int res = WSARecv(client_s, wsabuf, 1, nullptr, &recv_flag, &over, recv_callback);
-        if (0 != res) {
-            int err_no = WSAGetLastError();
-            if (WSA_IO_PENDING != err_no)
-                print_error("WSARecv", WSAGetLastError());
-        }
+        int res = WSARecv(client_s, recv_wsabuf, 1, nullptr, &recv_flag, &over, recv_callback);
     }
 
-    void do_send(int recv_size)
+    void do_send(int s_id, char* mess, int recv_size)
     {
-        wsabuf[0].len = recv_size;
-        int sed = WSASend(client_s, wsabuf, 1, nullptr, 0, &over, send_callback);
-        if (0 != sed) {
+        auto b = new EXP_OVER(s_id, mess, recv_size);
+        int res = WSASend(client_s, b->wsabuf, 1, nullptr, 0, &b->over, send_callback);
+        if (0 != res) {
             int err_no = WSAGetLastError();
             if (WSA_IO_PENDING != err_no)
                 print_error("WSASend", WSAGetLastError());
@@ -64,10 +85,30 @@ public:
             std::cout << buf[i];
         std::cout << std::endl;
     }
+
+    void broadcast(int m_size)
+    {
+        for (auto& p : g_players)
+            p.second.do_send(g_session_map[&over], buf, m_size);
+    }
 };
 
+class BASIC_PACKET
+{
+    short size{};
+    char type{};
+    int id{};
+};
 
-std::unordered_map<int, SESSION> g_players;
+class KEY_PACKET : BASIC_PACKET
+{
+    int key{};
+};
+
+class POS_PACKET : BASIC_PACKET
+{
+    int x{}, y{};
+};
 
 bool b_shutdown{ false };
 
@@ -89,7 +130,9 @@ void CALLBACK send_callback(DWORD err, DWORD send_size, LPWSAOVERLAPPED pover, D
     if (0 != err) {
         print_error("WSASend", WSAGetLastError());
     }
-    g_players[g_session_map[pover]].do_recv();
+    // 할당한 메모리 지우기
+    auto b = reinterpret_cast<EXP_OVER*>(pover);
+    delete b;
 }
 
 void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, DWORD recv_flag)
@@ -104,9 +147,9 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
     }
 
     g_players[my_id].print_message(recv_size);
-    g_players[my_id].do_send(recv_size);
+    g_players[my_id].broadcast(recv_size);
+    g_players[my_id].do_recv();
 }
-
 
 int main()
 {
