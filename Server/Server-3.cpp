@@ -15,17 +15,18 @@ void print_error(const char* msg, int err_no);
 std::unordered_map<LPWSAOVERLAPPED, int> g_session_map;
 
 class SESSION {
-    char buf[BUFSIZE];
-    WSABUF wsabuf[1];
-    SOCKET client_s;
-    WSAOVERLAPPED over;
+    char buf[BUFSIZE]{};
+    WSABUF wsabuf[1]{};
+    SOCKET client_s{};
+    WSAOVERLAPPED over{};
 
 public:
     SESSION(SOCKET s, int my_id) : client_s(s)
     {
         g_session_map[&over] = my_id;
     }
-    SESSION() {
+    SESSION() 
+    {
         std::cout << "ERROR" << std::endl;
     }
     ~SESSION() { closesocket(client_s); }
@@ -37,13 +38,18 @@ public:
         DWORD recv_flag = 0;
         ZeroMemory(&over, sizeof(over));
         int res = WSARecv(client_s, wsabuf, 1, nullptr, &recv_flag, &over, recv_callback);
+        if (0 != res) {
+            int err_no = WSAGetLastError();
+            if (WSA_IO_PENDING != err_no)
+                print_error("WSARecv", WSAGetLastError());
+        }
     }
 
     void do_send(int recv_size)
     {
         wsabuf[0].len = recv_size;
-        int res = WSASend(client_s, wsabuf, 1, nullptr, 0, &over, send_callback);
-        if (0 != res) {
+        int sed = WSASend(client_s, wsabuf, 1, nullptr, 0, &over, send_callback);
+        if (0 != sed) {
             int err_no = WSAGetLastError();
             if (WSA_IO_PENDING != err_no)
                 print_error("WSASend", WSAGetLastError());

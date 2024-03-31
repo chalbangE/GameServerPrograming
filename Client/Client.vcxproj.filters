@@ -18,7 +18,7 @@
     <ClCompile Include="SvChess.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="Client-3.cpp">
+    <ClCompile Include="cl.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

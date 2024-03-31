@@ -1,12 +1,13 @@
 #pragma once
 #include <iostream>
 #include <WS2tcpip.h>
+#include <algorithm>
 
 #define MapSize 8
-#define UP 72
-#define DOWN 80
-#define LEFT 75
-#define RIGHT 77
+#define UP 38
+#define DOWN 40
+#define LEFT 37
+#define RIGHT 39
 
 class Chess {
 public:
@@ -27,26 +28,23 @@ void print_error(const char* msg, int err_no)
 }
 
 void MoveChess(Chess& hos, char dir) {
+	int add_x{}, add_y{};
+
 	switch (dir) {
 	case LEFT:
-		--hos.x;
-		if (hos.x < 0)
-			++hos.x;
+		add_x = -1;
 		break;
 	case RIGHT:
-		++hos.x;
-		if (hos.x >= MapSize)
-			--hos.x;
+		add_x = 1;
 		break;
 	case UP:
-		--hos.y;
-		if (hos.y < 0)
-			++hos.y;
+		add_y = -1;
 		break;
 	case DOWN:
-		++hos.y;
-		if (hos.y >= MapSize)
-			--hos.y;
+		add_y = 1;
 		break;
 	}
+
+	hos.x = std::clamp(hos.x + add_x, 0, 7);
+	hos.y = std::clamp(hos.y + add_y, 0, 7);
 }

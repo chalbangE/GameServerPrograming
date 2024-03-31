@@ -127,7 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Client-3.cpp" />
+    <ClCompile Include="cl.cpp" />
     <ClCompile Include="SvChess.cpp" />
   </ItemGroup>
   <ItemGroup>

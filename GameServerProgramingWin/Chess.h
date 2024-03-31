@@ -5,13 +5,13 @@ class Chess
 {
 	RECT imgsize{};
 	RECT drowimgsize{};
-	int x{}, y{};
+	int x{}, y{}, id{};
 	CImage img{};
 
 public:
 	Chess();
-	Chess(const std::string& str, RECT rt);
+	Chess(const std::string& str, RECT rt, int id);
 	void Drow(HDC& mdc);
-	void Move(int add_x, int add_y);
+	void Move(int x, int y);
 };
 

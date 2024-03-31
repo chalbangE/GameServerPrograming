@@ -9,8 +9,11 @@ constexpr int BUFSIZE = 256;
 WSABUF wsabuf[1]; // 매번 호출하는 것보다 전역으로 생성해서 사용
 char buf[BUFSIZE];
 SOCKET server_s;
-WSAOVERLAPPED wsaover;   // read_n_send 안의 지역변수로 했을경우 함수가 종료되면
+
+// read_n_send 안의 지역변수로 했을경우 함수가 종료되면
 // 주소값을 보내준것이 의미가 없음
+WSAOVERLAPPED wsaover;   
+
 bool bshutdown{ false };
 
 
@@ -32,13 +35,21 @@ void read_n_send()
 
 void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
-    // 원래 wsarecv 끝나고 하는 것을 여기서 처리해줌
-    for (unsigned int i = 0; i < recv_size; ++i) {
-        std::cout << buf[i];
+    int p_size{0};
+    while (recv_size > p_size) {
+        int m_size{ buf[p_size] };
+        std::cout << "Player [" << static_cast<int>(buf[p_size + 1]) << "] : ";
+
+        // 원래 wsarecv 끝나고 하는 것을 여기서 처리해줌
+        for (unsigned int i = 0; i < recv_size; ++i) {
+            std::cout << buf[i + p_size + 2];
+        }
+        std::cout << std::endl;
+        p_size += m_size;
     }
-    std::cout << std::endl;
     read_n_send();
 }
+
 void CALLBACK send_callback(DWORD err, DWORD sent_size, LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
     // 원래 wsasend 끝나고 하는 것을 여기서 처리해줌
@@ -54,6 +65,7 @@ int main()
 
     WSADATA WSAData;
     WSAStartup(MAKEWORD(2, 0), &WSAData);
+
     server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
     SOCKADDR_IN server_addr;
     server_addr.sin_family = AF_INET;
@@ -66,5 +78,4 @@ int main()
     }
     closesocket(server_s);
     WSACleanup();
-
 }
