@@ -24,7 +24,6 @@ static void print_error(const char* msg, int err_no);
 
 ChessGame::ChessGame()
 {
-	// backgroud.Draw(mdc, 0, 0, 800, 800, 0, 0, 800, 800); // 기본 시작화면
 	backgroud.Load(TEXT("IMG/Background.png"));
 
 	w = backgroud.GetWidth();
@@ -54,8 +53,9 @@ void ChessGame::Drow(HDC& mdc)
 {
 	backgroud.Draw(mdc, 0, 0, w, h, 0, 0, w, h);
 
-	for (Chess* ch : chesses) {
-		ch->Drow(mdc);
+	for (auto& ch : chesses) {
+		if (ch.second != nullptr)
+			ch.second->Drow(mdc);
 	}
 }
 
@@ -77,24 +77,34 @@ void ChessGame::AddChess()
 		std::cout << "pos_p.id : " << pos_p.id << std::endl;
 
 		if (pos_p.id != -1) {
-			const std::string str{ "IMG/Momonga" + std::to_string(pos_p.id + 1) + ".png" };
+			const std::string str{ "IMG/Momonga" + std::to_string((pos_p.id % 10) + 1) + ".png" };
 			RECT rt{ 0, 0, 100, 100 };
 			Chess* ch = new Chess{ str, rt, pos_p.id };
-			chesses.push_back(ch);
+			chesses.try_emplace(pos_p.id, ch);
 			chesses[pos_p.id]->Move(pos_p.x, pos_p.y);
+
+			id = pos_p.id;
 		}
 		else
 			break;
 
-	} 
-
-	id = chesses.size() - 1;
+	}
 	std::cout << "만들고 체스 갯수 : " << chesses.size() << std::endl;
 }
 
-void ChessGame::MinusChess(int my_id)
+void ChessGame::MinusChess()
 {
-	// chesses[my_id] = nullptr;
+	key_p.type = LOGOUT_TYPE;
+	key_p.id = id;
+
+	DWORD sent_size{};
+	int sed = WSASend(sev_s, send_wsabuf, 1, &sent_size, 0, &wsaover, send_callback);
+	if (0 != sed) {
+		int err_no = WSAGetLastError();
+		// 에러 겹친 i/o 작업을 진행하고 있습니다. 라고 나오는 게 정상임
+		if (WSA_IO_PENDING != err_no)
+			print_error("MinusChess - WSASend", WSAGetLastError());
+	}
 }
 
 void ChessGame::Move()

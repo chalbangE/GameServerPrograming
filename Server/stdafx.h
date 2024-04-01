@@ -15,6 +15,7 @@
 #define KEY_TYPE 2
 #define POS_TYPE 3
 #define NEW_LOGIN_TYPE 4
+#define NEW_LOGOUT_TYPE 5
 
 const static short SERVER_PORT = 2551;
 const static int BUFSIZE = 256;

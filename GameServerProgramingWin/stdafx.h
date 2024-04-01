@@ -11,6 +11,7 @@
 #include <Windows.h>
 #include <tchar.h>
 #include <WS2tcpip.h>
+#include <unordered_map>
 #pragma comment (lib, "WS2_32.LIB") // 32 쓰는 이유는 16비트 쓰던 구시절의 잔재
 
 #include "PACKET.h"

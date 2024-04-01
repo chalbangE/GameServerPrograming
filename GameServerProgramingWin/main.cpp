@@ -137,6 +137,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM IParam)
 		break;
 	}
 	case WM_DESTROY: {
+		chessgame.MinusChess();
+
 		closesocket(server_s);
 		WSACleanup();
 
@@ -153,7 +155,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM IParam)
 
 void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
-	//memcpy(&chessgame.pos_p, )
 	switch (chessgame.pos_p.type)
 	{
 	case NEW_LOGIN_TYPE: {
@@ -161,18 +162,19 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pwsaover
 			const std::string str{ "IMG/Momonga" + std::to_string(chessgame.pos_p.id + 1) + ".png" };
 			RECT rt{ 0, 0, 100, 100 };
 			Chess* ch = new Chess{ str, rt, chessgame.pos_p.id };
-			chessgame.chesses.push_back(ch);
+			chessgame.chesses.try_emplace(chessgame.pos_p.id, ch);
 			chessgame.chesses[chessgame.pos_p.id]->Move(chessgame.pos_p.x, chessgame.pos_p.y);
 		}
 		std::cout << "현재 체스는 몇 개? : " << chessgame.chesses.size() << std::endl;
 
 		break;
 	}
-	case LOGOUT_TYPE: {
+	case NEW_LOGOUT_TYPE: {
+		chessgame.chesses[chessgame.pos_p.id] = nullptr;
 		break;
 	}
 	case POS_TYPE: {
-		if (chessgame.pos_p.id != -1 && chessgame.chesses.size() > chessgame.pos_p.id) {
+		if (chessgame.pos_p.id != -1) {
 			chessgame.chesses[chessgame.pos_p.id]->Move(chessgame.pos_p.x, chessgame.pos_p.y);
 		}
 		break;

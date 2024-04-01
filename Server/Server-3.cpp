@@ -100,6 +100,14 @@ public:
             p.second.do_send(g_session_map[&over], send_wsabuf[0].buf, m_size);
         }
     }
+
+    void broadcast(int m_size, int my_id)
+    {
+        for (auto& p : g_players) {
+            if (my_id != p.second.id)
+                p.second.do_send(g_session_map[&over], send_wsabuf[0].buf, m_size);
+        }
+    }
 };
 
 bool b_shutdown{ false };
@@ -125,18 +133,13 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
 
     switch (key_p.type) {
     case LOGIN_TYPE: {
-        pos_p.id = 0;
-        while (my_id >= pos_p.id) {
+        for (auto& p : g_players) {
             pos_p.type = LOGIN_TYPE;
-            if (g_players[pos_p.id].id != -1) {
-                pos_p.x = g_players[pos_p.id].hos.x;
-                pos_p.y = g_players[pos_p.id].hos.y;
+            pos_p.x = p.second.hos.x;
+            pos_p.y = p.second.hos.y;
+            pos_p.id = p.first;
 
-                g_players[my_id].do_send(g_session_map[pover], g_players[my_id].send_wsabuf[0].buf, sizeof(POS_PACKET));
-            }
-            ++pos_p.id;
-
-            std::cout << pos_p.id << std::endl;
+            g_players[my_id].do_send(g_session_map[pover], g_players[my_id].send_wsabuf[0].buf, sizeof(POS_PACKET));
         }
 
         pos_p.id = -1;
@@ -150,7 +153,12 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
         break;
     }
     case LOGOUT_TYPE: {
+        pos_p.id = my_id;
+        pos_p.type = NEW_LOGOUT_TYPE;
+        g_players[my_id].broadcast(sizeof(POS_PACKET), my_id);
 
+        g_session_map.erase(pover);
+        g_players.erase(my_id);
         break;
     }
     case KEY_TYPE: {

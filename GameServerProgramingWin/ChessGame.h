@@ -8,7 +8,7 @@ class ChessGame
 public: 
 	int w{}, h{}, id{};
 	CImage backgroud{};
-	std::vector<Chess*> chesses;
+	std::unordered_map<int, Chess*> chesses;
 	SOCKET sev_s{};
 
 	KEY_PACKET key_p{ 0 };
@@ -19,7 +19,7 @@ public:
 	void init(SOCKET& server);
 	void Drow(HDC&);
 	void AddChess();
-	void MinusChess(int my_id);
+	void MinusChess();
 	void Move();
 	void PressKey(WPARAM wParam);
 	void do_recv();
