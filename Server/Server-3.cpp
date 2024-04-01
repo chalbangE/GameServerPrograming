@@ -1,135 +1,115 @@
-#include <iostream>
-#include <WS2tcpip.h>
+#pragma once
+
 #include <unordered_map> // 검색속도가 map보다 훨~씬 빠름 O(N) = 1임
 
 #pragma comment (lib, "WS2_32.LIB")
 
-const short SERVER_PORT = 2551;
-const int BUFSIZE = 256;
-
+#include "stdafx.h"
+#include "PACKET.h"
 
 void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, DWORD recv_flag);
 void CALLBACK send_callback(DWORD err, DWORD send_size, LPWSAOVERLAPPED pover, DWORD send_flag);
-void print_error(const char* msg, int err_no);
 
 class SESSION;
 class EXP_OVER;
-class KEY_PACKET;
-class POS_PACKET;
-class BASIC_PACKET;
 
 std::unordered_map<LPWSAOVERLAPPED, int> g_session_map;
 std::unordered_map<int, SESSION> g_players;
+
+KEY_PACKET key_p{ KEY_TYPE };
+POS_PACKET pos_p{ POS_TYPE };
 
 class EXP_OVER
 {
 public:
     WSAOVERLAPPED over;
     WSABUF wsabuf[1];
-    char buf[BUFSIZE];
+    char buf[BUFSIZE]{};
+    int id;
 
-    EXP_OVER(int s_id, char* mess, int m_size)
+    EXP_OVER(int s_id, char* mess, int m_size) : id{ s_id }
     {
         ZeroMemory(&over, sizeof(over));
         wsabuf[0].buf = buf;
-        wsabuf[0].len = m_size + 2;
+        wsabuf[0].len = m_size;
 
-        buf[0] = m_size + 2;
-        buf[1] = s_id;
-        memcpy(buf + 2, mess, m_size);
+        memcpy(buf, mess, m_size);
     }
 };
 
 class SESSION {
     char buf[BUFSIZE];
-    WSABUF recv_wsabuf[1];
-    WSABUF send_wsabuf[1];
     SOCKET client_s;
     WSAOVERLAPPED over;
 
 public:
-    SESSION(SOCKET s, int my_id) : client_s(s)
+    Chess hos;
+    int id = -1;
+    WSABUF send_wsabuf[1];
+    WSABUF recv_wsabuf[1];
+    char recv_buf[BUFSIZE];
+
+    SESSION(SOCKET s, int my_id) : client_s(s), id(my_id)
     {
+        recv_wsabuf[0].buf = reinterpret_cast<char*>(&key_p);
+        recv_wsabuf[0].len = sizeof(KEY_PACKET);
+        send_wsabuf[0].buf = reinterpret_cast<char*>(&pos_p);
+        send_wsabuf[0].len = sizeof(POS_PACKET);
+
         g_session_map[&over] = my_id;
     }
-    SESSION() {
+    SESSION() 
+    {
         std::cout << "ERROR" << std::endl;
     }
     ~SESSION() { closesocket(client_s); }
 
     void do_recv()
     {
-        recv_wsabuf[0].buf = buf;
-        recv_wsabuf[0].len = BUFSIZE;
         DWORD recv_flag = 0;
         ZeroMemory(&over, sizeof(over));
         int res = WSARecv(client_s, recv_wsabuf, 1, nullptr, &recv_flag, &over, recv_callback);
+        if (0 != res) {
+            int err_no = WSAGetLastError();
+            if (WSA_IO_PENDING != err_no)
+                print_error("do_recv - WSARecv", WSAGetLastError());
+        }
     }
 
     void do_send(int s_id, char* mess, int recv_size)
     {
         auto b = new EXP_OVER(s_id, mess, recv_size);
+        
         int res = WSASend(client_s, b->wsabuf, 1, nullptr, 0, &b->over, send_callback);
         if (0 != res) {
             int err_no = WSAGetLastError();
             if (WSA_IO_PENDING != err_no)
-                print_error("WSASend", WSAGetLastError());
+                print_error("do_send - WSASend", WSAGetLastError());
         }
     }
 
     void print_message(DWORD recv_size)
     {
         int my_id = g_session_map[&over];
-        std::cout << "Client [" << my_id << "] Sent: ";
-        for (unsigned int i = 0; i < recv_size; ++i)
-            std::cout << buf[i];
-        std::cout << std::endl;
+        std::cout << "Client [" << my_id << "] Sent: " << key_p.key << std::endl;
     }
 
     void broadcast(int m_size)
     {
-        for (auto& p : g_players)
-            p.second.do_send(g_session_map[&over], buf, m_size);
+        for (auto& p : g_players) {
+            p.second.do_send(g_session_map[&over], send_wsabuf[0].buf, m_size);
+        }
     }
 };
 
-class BASIC_PACKET
-{
-    short size{};
-    char type{};
-    int id{};
-};
-
-class KEY_PACKET : BASIC_PACKET
-{
-    int key{};
-};
-
-class POS_PACKET : BASIC_PACKET
-{
-    int x{}, y{};
-};
-
 bool b_shutdown{ false };
-
-void print_error(const char* msg, int err_no)
-{
-    WCHAR* msg_buf;
-    FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-        NULL, err_no,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPTSTR>(&msg_buf), 0, NULL);
-    std::cout << msg;
-    std::wcout << L" 에러 " << msg_buf << std::endl;
-    while (true); // 디버깅 용
-    LocalFree(msg_buf);
-}
 
 void CALLBACK send_callback(DWORD err, DWORD send_size, LPWSAOVERLAPPED pover, DWORD send_flag)
 {
     if (0 != err) {
         print_error("WSASend", WSAGetLastError());
     }
+
     // 할당한 메모리 지우기
     auto b = reinterpret_cast<EXP_OVER*>(pover);
     delete b;
@@ -141,15 +121,56 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
         print_error("WSARecv", WSAGetLastError());
     }
     int my_id = g_session_map[pover];
-    if (0 == recv_size) {
-        g_players.erase(my_id);
-        return;
-    }
+    key_p.id = my_id;
 
-    g_players[my_id].print_message(recv_size);
-    g_players[my_id].broadcast(recv_size);
-    g_players[my_id].do_recv();
+    switch (key_p.type) {
+    case LOGIN_TYPE: {
+        pos_p.id = 0;
+        while (my_id >= pos_p.id) {
+            pos_p.type = LOGIN_TYPE;
+            if (g_players[pos_p.id].id != -1) {
+                pos_p.x = g_players[pos_p.id].hos.x;
+                pos_p.y = g_players[pos_p.id].hos.y;
+
+                g_players[my_id].do_send(g_session_map[pover], g_players[my_id].send_wsabuf[0].buf, sizeof(POS_PACKET));
+            }
+            ++pos_p.id;
+
+            std::cout << pos_p.id << std::endl;
+        }
+
+        pos_p.id = -1;
+        g_players[my_id].do_send(g_session_map[pover], g_players[my_id].send_wsabuf[0].buf, sizeof(POS_PACKET));
+
+        pos_p.id = my_id;
+        pos_p.type = NEW_LOGIN_TYPE;
+        g_players[my_id].broadcast(sizeof(POS_PACKET));
+        g_players[my_id].do_recv();
+
+        break;
+    }
+    case LOGOUT_TYPE: {
+
+        break;
+    }
+    case KEY_TYPE: {
+        MoveChess(g_players[key_p.id].hos, key_p.key);
+
+        pos_p.type = POS_TYPE;
+        pos_p.id = my_id;
+        pos_p.x = g_players[key_p.id].hos.x;
+        pos_p.y = g_players[key_p.id].hos.y;
+
+        g_players[my_id].print_message(recv_size);
+        g_players[my_id].broadcast(sizeof(POS_PACKET));
+        g_players[my_id].do_recv();
+        break;
+    }
+    default:
+        break;
+    }
 }
+
 
 int main()
 {

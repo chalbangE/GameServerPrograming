@@ -1,22 +1,27 @@
 #pragma once
 #include "stdafx.h"
+
 class Chess;
 
 class ChessGame
 {
-	int w{}, h{};
+public: 
+	int w{}, h{}, id{};
 	CImage backgroud{};
 	std::vector<Chess*> chesses;
-	SOCKET sev_s;
+	SOCKET sev_s{};
 
-public: 
+	KEY_PACKET key_p{ 0 };
+	POS_PACKET pos_p{ 3 };
+
 	ChessGame();
 	ChessGame(SOCKET& server);
+	void init(SOCKET& server);
 	void Drow(HDC&);
 	void AddChess();
 	void MinusChess(int my_id);
 	void Move();
-	void Move(int my_id, int add_x, int add_y);
 	void PressKey(WPARAM wParam);
+	void do_recv();
 };
 

@@ -1,12 +1,23 @@
 #pragma once
 
-#include "stdafx.h"
+#include <iostream>
+#include <WS2tcpip.h>
+#include <algorithm>
 
 #define MapSize 8
 #define UP 38
 #define DOWN 40
 #define LEFT 37
 #define RIGHT 39
+
+#define LOGIN_TYPE 0
+#define LOGOUT_TYPE 1
+#define KEY_TYPE 2
+#define POS_TYPE 3
+#define NEW_LOGIN_TYPE 4
+
+const static short SERVER_PORT = 2551;
+const static int BUFSIZE = 256;
 
 class Chess {
 public:
@@ -22,7 +33,10 @@ void print_error(const char* msg, int err_no)
 		reinterpret_cast<LPWSTR>(&msg_buf), 0, NULL);
 	std::cout << msg;
 	std::wcout << L"\t¿¡·¯ : " << msg_buf;
-	while (true);
+	while (true) {
+		if (err_no == 0)
+			return;
+	};
 	LocalFree(msg_buf);
 }
 
@@ -46,4 +60,5 @@ void MoveChess(Chess& hos, char dir) {
 
 	hos.x = std::clamp(hos.x + add_x, 0, 7);
 	hos.y = std::clamp(hos.y + add_y, 0, 7);
+	std::cout << hos.x << "   " << hos.y << std::endl;
 }

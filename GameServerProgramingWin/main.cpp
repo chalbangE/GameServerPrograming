@@ -6,7 +6,7 @@
 #include "stdafx.h"
 #include "ChessGame.h"
 #include "Chess.h"
-#include "ClientCallback.h"
+#include "define.h"
 
 extern WSABUF wsabuf[1]; // 매번 호출하는 것보다 전역으로 생성해서 사용
 extern char buf[BUFSIZE];
@@ -15,7 +15,10 @@ extern SOCKET server_s;
 // read_n_send 안의 지역변수로 했을경우 함수가 종료되면 주소값을 보내준것이 의미가 없음
 extern WSAOVERLAPPED wsaover;
 
+ChessGame chessgame{};
+
 extern bool bshutdown; // 종료 조건 변수
+static void print_error(const char* msg, int err_no);
 
 HINSTANCE g_hinst;
 LPCTSTR IpszClass = L"Window Programming Lap";
@@ -31,16 +34,18 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hPrevinstance, LPSTR IpszCmdPa
 	// 윈도우에서만 해야하는 삽질. 옛날에 만든 프로그램과의 호환성 때문에 필요함
 	// 빌게이츠 흑역사 ㅋㅋ
 	WSADATA WSAData{};
-	WSAStartup(MAKEWORD(2, 0), &WSAData);
+	int err = WSAStartup(MAKEWORD(2, 2), &WSAData);
+	if (0 != err) {
+		print_error("WSAStartup", WSAGetLastError());
+	}
 
-	server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, 0);
-	SOCKADDR_IN server_addr;
+	server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+	SOCKADDR_IN server_addr; 
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(SERVER_PORT);
 	inet_pton(AF_INET, SERVER_ADDR, &server_addr.sin_addr);
 
 	connect(server_s, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
-	std::cout << server_s << '\n';
 
 	// ------ 윈프 초기설정 ---------------
 
@@ -83,15 +88,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM IParam)
 	HDC hdc{}; HDC mdc{};
 	HBITMAP HBitmap, OldBitmap;
 	RECT window{ 0, 0, 800, 800 };
-	static ChessGame chessgame{ server_s };
+
 
 	// 메세지 처리하기
 	switch (uMsg) {
 	case WM_CREATE: {
+		chessgame.init(server_s);
+
 		AdjustWindowRect(&window, WS_OVERLAPPEDWINDOW, false);         
 		MoveWindow(hWnd, 150, 70, window.right - window.left, window.bottom - window.top, false);
 
 		chessgame.AddChess();
+
+		SetTimer(hWnd, 0, 30, NULL);
 
 		InvalidateRect(hWnd, NULL, FALSE);
 		break;
@@ -117,6 +126,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM IParam)
 		break;
 	}
 	case WM_TIMER: {
+		SleepEx(1, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 		break;
 	}
 	case WM_KEYDOWN: {
@@ -126,7 +137,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM IParam)
 		break;
 	}
 	case WM_DESTROY: {
-
 		closesocket(server_s);
 		WSACleanup();
 
@@ -140,40 +150,52 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM IParam)
 	return DefWindowProc(hWnd, uMsg, wParam, IParam);
 }
 
-/*	while (1) {
-		char buf[BUFSIZE]{};
-		while (1) {
-			if (_kbhit()) {        //키보드 입력 확인 (true / false)
-				char dir = _getch();      // 방향키 입력시 224 --이 들어오게 되기에 앞에 있는 값 224를 없앰
-				if (dir == -32) {    // -32로 입력되면
-					dir = _getch();  // 새로 입력값을 판별하여 상하좌우 출력
-					buf[0] = dir;
-					buf[1] = '\0';
-					break;
-				}
-			}
+
+void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pwsaover, DWORD sendflag)
+{
+	//memcpy(&chessgame.pos_p, )
+	switch (chessgame.pos_p.type)
+	{
+	case NEW_LOGIN_TYPE: {
+		if (chessgame.pos_p.id != -1 && chessgame.id != chessgame.pos_p.id) {
+			const std::string str{ "IMG/Momonga" + std::to_string(chessgame.pos_p.id + 1) + ".png" };
+			RECT rt{ 0, 0, 100, 100 };
+			Chess* ch = new Chess{ str, rt, chessgame.pos_p.id };
+			chessgame.chesses.push_back(ch);
+			chessgame.chesses[chessgame.pos_p.id]->Move(chessgame.pos_p.x, chessgame.pos_p.y);
 		}
+		std::cout << "현재 체스는 몇 개? : " << chessgame.chesses.size() << std::endl;
 
-		MoveCursor();
+		break;
+	}
+	case LOGOUT_TYPE: {
+		break;
+	}
+	case POS_TYPE: {
+		if (chessgame.pos_p.id != -1 && chessgame.chesses.size() > chessgame.pos_p.id) {
+			chessgame.chesses[chessgame.pos_p.id]->Move(chessgame.pos_p.x, chessgame.pos_p.y);
+		}
+		break;
+	}
+	default:
+		break;
+	}
 
-		// send
-		WSABUF wsabuf[1];
-		wsabuf[0].buf = buf;
-		wsabuf[0].len = static_cast<int>(strlen(buf)) + 1; // 끝에 0까지 보내야함 \0
-		if (wsabuf[0].len == 1)
-			break;
-		DWORD sent_size{};
-		int sed = WSASend(server_s, wsabuf, 1, &sent_size, 0, nullptr, nullptr);
-		if (sed != 0)
-			print_error("WSASend", WSAGetLastError());
+	chessgame.do_recv();
+}
 
-		// recv
-		wsabuf[0].len = BUFSIZE;
-		DWORD recv_size{};
-		DWORD recv_flag{ 0 };
-		int res = WSARecv(server_s, wsabuf, 1, &recv_size, &recv_flag, nullptr, nullptr);		
-		if (res != 0)
-			print_error("WSARecv", WSAGetLastError());
-		Chess hos{ wsabuf[0].buf[0],  wsabuf[0].buf[1] };
-		PrintBoard(hos);
-	}*/
+void CALLBACK send_callback(DWORD err, DWORD sent_size, LPWSAOVERLAPPED pwsaover, DWORD sendflag)
+{ }
+
+static void print_error(const char* msg, int err_no)
+{
+	WCHAR* msg_buf{};
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+		NULL, err_no,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		reinterpret_cast<LPWSTR>(&msg_buf), 0, NULL);
+	std::cout << msg;
+	std::wcout << L"\t에러 : " << msg_buf;
+	while (true);
+	LocalFree(msg_buf);
+}

@@ -129,10 +129,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Server-1.h" />
+    <ClCompile Include="PACKET.cpp" />
+    <ClCompile Include="Server-3.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Server-1.cpp" />
+    <ClInclude Include="PACKET.h" />
+    <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

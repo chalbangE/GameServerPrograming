@@ -1,9 +1,11 @@
 #pragma once
 
+#include "stdafx.h"
 #include "Chess.h"
-#include "ClientCallback.h"
+#include "define.h"
 
-extern WSABUF wsabuf[1]; // 매번 호출하는 것보다 전역으로 생성해서 사용
+extern WSABUF recv_wsabuf[1];
+extern WSABUF send_wsabuf[1];
 extern char buf[BUFSIZE];
 extern SOCKET server_s;
 
